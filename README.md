@@ -83,7 +83,7 @@ Network configuration lives in one place, [`src/lib/stellar.ts`](src/lib/stellar
 ### 3. Install and run
 
 ```bash
-git clone https://github.com/<your-username>/stellar-pay.git
+git clone https://github.com/koustavx08/stellar-pay.git
 cd stellar-pay
 npm install
 npm run dev
