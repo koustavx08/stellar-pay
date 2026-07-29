@@ -25,6 +25,29 @@ export function isValidAddress(address: string): boolean {
   return StrKey.isValidEd25519PublicKey(address.trim())
 }
 
+/** Decimal amount, up to 7 fractional digits — what Stellar calls a stroop-precision value. */
+export const AMOUNT_PATTERN = /^\d*\.?\d*$/
+
+/**
+ * The SDK rejects loose decimal strings like "1." or ".5", and floats lose
+ * precision at stroop scale, so normalise as text: trim to 7 fractional
+ * digits and drop redundant zeros without ever parsing to a number.
+ */
+export function normalizeAmount(input: string): string {
+  const trimmed = input.trim()
+  if (!trimmed || trimmed === '.' || !AMOUNT_PATTERN.test(trimmed)) {
+    throw new Error('Enter a valid decimal amount.')
+  }
+
+  const [whole = '', fraction = ''] = trimmed.split('.')
+  const integerPart = whole.replace(/^0+(?=\d)/, '') || '0'
+  const fractionPart = fraction.slice(0, 7).replace(/0+$/, '')
+  const normalized = fractionPart ? `${integerPart}.${fractionPart}` : integerPart
+
+  if (normalized === '0') throw new Error('Enter an amount greater than 0.')
+  return normalized
+}
+
 export function explorerTxUrl(hash: string): string {
   return `https://stellar.expert/explorer/testnet/tx/${hash}`
 }
@@ -96,9 +119,11 @@ export interface PaymentRequest {
 export async function buildPaymentXdr({
   source,
   destination,
-  amount,
+  amount: rawAmount,
   memo,
 }: PaymentRequest): Promise<string> {
+  const amount = normalizeAmount(rawAmount)
+
   const account = await server.loadAccount(source).catch((error) => {
     if (isNotFound(error)) {
       throw new Error('Your account is not funded yet. Use the faucet button first.')

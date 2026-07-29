@@ -3,10 +3,12 @@ import { type FormEvent, useState } from 'react'
 import type { TxOutcome } from './TxFeedback'
 import { signXdr } from '../lib/freighter'
 import {
+  AMOUNT_PATTERN,
   BASE_RESERVE_XLM,
   buildPaymentXdr,
   describeError,
   isValidAddress,
+  normalizeAmount,
   submitSignedXdr,
 } from '../lib/stellar'
 
@@ -54,12 +56,17 @@ export function PaymentForm({
     if (!isValidAddress(to)) return 'That is not a valid Stellar public key (it starts with G).'
     if (to === address) return 'You cannot send XLM to your own address.'
 
-    const value = Number(amount)
-    if (!amount.trim() || !Number.isFinite(value) || value <= 0) {
-      return 'Enter an amount greater than 0.'
+    const trimmedAmount = amount.trim()
+    if (!trimmedAmount || !AMOUNT_PATTERN.test(trimmedAmount)) {
+      return 'Enter the amount as a plain decimal number, for example 12.5.'
     }
-    if ((amount.split('.')[1]?.length ?? 0) > 7) {
+    if ((trimmedAmount.split('.')[1]?.length ?? 0) > 7) {
       return 'XLM supports at most 7 decimal places.'
+    }
+
+    const value = Number(trimmedAmount)
+    if (!Number.isFinite(value) || value <= 0) {
+      return 'Enter an amount greater than 0.'
     }
     if (value > spendable) {
       return `You can send at most ${spendable.toFixed(7)} XLM (1 XLM reserve + fee stay in the account).`
@@ -80,8 +87,10 @@ export function PaymentForm({
     const to = destination.trim()
 
     try {
+      const sending = normalizeAmount(amount)
+
       setStage('building')
-      const xdr = await buildPaymentXdr({ source: address, destination: to, amount, memo })
+      const xdr = await buildPaymentXdr({ source: address, destination: to, amount: sending, memo })
 
       setStage('signing')
       const signed = await signXdr(xdr, address)
@@ -89,7 +98,14 @@ export function PaymentForm({
       setStage('submitting')
       const { hash, ledger } = await submitSignedXdr(signed)
 
-      onResult({ status: 'success', hash, ledger, amount, destination: to, memo: memo.trim() })
+      onResult({
+        status: 'success',
+        hash,
+        ledger,
+        amount: sending,
+        destination: to,
+        memo: memo.trim(),
+      })
       setDestination('')
       setAmount('')
       setMemo('')

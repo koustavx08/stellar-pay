@@ -10,6 +10,9 @@ import {
 
 const POLL_INTERVAL_MS = 4000
 
+/** Remembers an explicit disconnect so a reload does not silently re-connect. */
+const DISCONNECTED_KEY = 'stellar-pay:disconnected'
+
 export type WalletStatus = 'disconnected' | 'connecting' | 'connected'
 
 export interface WalletError {
@@ -33,24 +36,30 @@ export function useWallet(): Wallet {
   const [status, setStatus] = useState<WalletStatus>('disconnected')
   const [error, setError] = useState<WalletError | null>(null)
 
-  /** Set once the user disconnects, so the poller does not silently re-connect them. */
-  const dismissed = useRef(false)
+  /** True while the user has explicitly disconnected; blocks the background sync. */
+  const dismissed = useRef(readDismissed())
+  /** True while the Freighter popup is open, so the sync cannot clobber the attempt. */
+  const connecting = useRef(false)
 
   const connect = useCallback(async () => {
+    connecting.current = true
     setStatus('connecting')
     setError(null)
     try {
       const next = await connectWallet()
       dismissed.current = false
+      writeDismissed(false)
       setSession(next)
       setStatus('connected')
     } catch (cause) {
-      setStatus('disconnected')
       setSession(null)
+      setStatus('disconnected')
       setError({
         message: cause instanceof Error ? cause.message : 'Could not connect to Freighter.',
         hint: cause instanceof FreighterError ? cause.hint : undefined,
       })
+    } finally {
+      connecting.current = false
     }
   }, [])
 
@@ -61,6 +70,7 @@ export function useWallet(): Wallet {
    */
   const disconnect = useCallback(() => {
     dismissed.current = true
+    writeDismissed(true)
     setSession(null)
     setStatus('disconnected')
     setError(null)
@@ -72,20 +82,21 @@ export function useWallet(): Wallet {
     let active = true
 
     const sync = async () => {
-      if (dismissed.current) return
+      if (dismissed.current || connecting.current) return
       try {
         const next = await restoreSession()
-        if (!active) return
+        if (!active || dismissed.current || connecting.current) return
 
-        setSession((current) => {
-          if (!next) {
-            setStatus('disconnected')
-            return null
-          }
-          setStatus('connected')
-          if (current?.address === next.address && current.network === next.network) return current
-          return next
-        })
+        if (!next) {
+          setSession(null)
+          setStatus('disconnected')
+          return
+        }
+
+        setSession((current) =>
+          current?.address === next.address && current.network === next.network ? current : next,
+        )
+        setStatus('connected')
       } catch {
         // A transient extension error should not tear down a working session.
       }
@@ -108,5 +119,22 @@ export function useWallet(): Wallet {
     connect,
     disconnect,
     clearError: useCallback(() => setError(null), []),
+  }
+}
+
+function readDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(DISCONNECTED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function writeDismissed(value: boolean): void {
+  try {
+    if (value) window.localStorage.setItem(DISCONNECTED_KEY, 'true')
+    else window.localStorage.removeItem(DISCONNECTED_KEY)
+  } catch {
+    // Storage can be unavailable in private mode; the session just won't persist.
   }
 }

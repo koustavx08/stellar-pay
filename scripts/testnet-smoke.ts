@@ -1,4 +1,4 @@
-import { Keypair, TransactionBuilder } from '@stellar/stellar-sdk'
+﻿import { Keypair, TransactionBuilder } from '@stellar/stellar-sdk'
 
 import {
   NETWORK_PASSPHRASE,
@@ -6,6 +6,7 @@ import {
   fundWithFriendbot,
   getXlmBalance,
   isValidAddress,
+  normalizeAmount,
   submitSignedXdr,
 } from '../src/lib/stellar'
 
@@ -19,14 +20,27 @@ async function main() {
   log('sender valid', isValidAddress(sender.publicKey()))
   log('garbage valid', isValidAddress('not-a-key'))
 
-  console.log('2. balance before funding')
+  console.log('2. amount normalization')
+  for (const input of ['1.', '.5', '007.50', '1.23456789', '2']) {
+    log(`"${input}"`, normalizeAmount(input))
+  }
+  for (const input of ['0', '0.0000000', 'abc', '']) {
+    try {
+      normalizeAmount(input)
+      log(`"${input}"`, 'ACCEPTED (should have been rejected)')
+    } catch (error) {
+      log(`"${input}" rejected`, (error as Error).message)
+    }
+  }
+
+  console.log('3. balance before funding')
   log('sender', await getXlmBalance(sender.publicKey()))
 
-  console.log('3. friendbot')
+  console.log('4. friendbot')
   await fundWithFriendbot(sender.publicKey())
   log('sender', await getXlmBalance(sender.publicKey()))
 
-  console.log('4. build + sign + submit (createAccount path - new destination)')
+  console.log('5. build + sign + submit (createAccount path - new destination)')
   const xdr = await buildPaymentXdr({
     source: sender.publicKey(),
     destination: receiver.publicKey(),
@@ -40,18 +54,18 @@ async function main() {
   log('ledger', result.ledger)
   log('receiver balance', await getXlmBalance(receiver.publicKey()))
 
-  console.log('5. second payment (payment path - existing destination)')
+  console.log('6. second payment (payment path - existing destination, loose "1." input)')
   const xdr2 = await buildPaymentXdr({
     source: sender.publicKey(),
     destination: receiver.publicKey(),
-    amount: '1.5',
+    amount: '1.',
   })
   const tx2 = TransactionBuilder.fromXDR(xdr2, NETWORK_PASSPHRASE)
   tx2.sign(sender)
   log('hash', (await submitSignedXdr(tx2.toXDR())).hash)
   log('receiver balance', await getXlmBalance(receiver.publicKey()))
 
-  console.log('6. error mapping - overspend')
+  console.log('7. error mapping - overspend')
   const xdr3 = await buildPaymentXdr({
     source: sender.publicKey(),
     destination: receiver.publicKey(),
@@ -61,7 +75,7 @@ async function main() {
   tx3.sign(sender)
   await submitSignedXdr(tx3.toXDR()).catch((error) => log('mapped error', error.message))
 
-  console.log('7. error mapping - new account below reserve')
+  console.log('8. error mapping - new account below reserve')
   await buildPaymentXdr({
     source: sender.publicKey(),
     destination: Keypair.random().publicKey(),

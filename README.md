@@ -17,7 +17,7 @@ Friendbot faucet.
 | --- | --- |
 | **Wallet setup** | Freighter extension, network locked to Testnet — the UI warns and disables sending if the wallet is on any other network |
 | **Wallet connect** | `requestAccess()` prompts Freighter; an already-approved session is restored silently on reload |
-| **Wallet disconnect** | Clears the local session and stops all wallet reads |
+| **Wallet disconnect** | Clears the local session, stops all wallet reads, and is remembered across reloads so the app does not silently re-connect |
 | **Balance fetch** | Native XLM balance read from Horizon, with unfunded accounts detected and a one-click Friendbot faucet |
 | **Balance display** | Large balance card that also shows the *spendable* amount (balance − 1 XLM base reserve) |
 | **Send XLM** | Builds a payment transaction, signs it in Freighter, submits it to Horizon |
@@ -31,6 +31,9 @@ Two details worth calling out:
   the 1 XLM minimum. This is the failure most Level 1 submissions hit.
 - **Reserve-aware amounts.** The "Max" button and validation subtract the 1 XLM base reserve and a fee
   buffer, so a valid-looking amount does not fail on-chain with `op_underfunded`.
+- **Amounts are normalised as text, not floats.** The SDK rejects loose input like `1.` or `.5`, and
+  parsing to a JS number loses precision at stroop scale, so `normalizeAmount` trims to 7 fractional
+  digits purely as a string.
 
 ---
 
@@ -113,33 +116,43 @@ Open <http://localhost:5173>.
 ## ✅ Verifying the transaction logic
 
 `npm run smoke` exercises the whole on-chain path without the browser: it generates a throwaway
-keypair, funds it with Friendbot, reads the balance, builds/signs/submits two payments, and checks
-that the error mapping produces readable messages.
+keypair, funds it with Friendbot, reads the balance, checks amount normalisation, builds/signs/submits
+two payments, and confirms the error mapping produces readable messages.
 
 ```
 1. address validation
   sender valid: true
   garbage valid: false
-2. balance before funding
+2. amount normalization
+  "1.": 1
+  ".5": 0.5
+  "007.50": 7.5
+  "1.23456789": 1.2345678
+  "2": 2
+  "0" rejected: Enter an amount greater than 0.
+  "0.0000000" rejected: Enter an amount greater than 0.
+  "abc" rejected: Enter a valid decimal amount.
+  "" rejected: Enter a valid decimal amount.
+3. balance before funding
   sender: { xlm: '0', funded: false }
-3. friendbot
+4. friendbot
   sender: { xlm: '10000.0000000', funded: true }
-4. build + sign + submit (createAccount path - new destination)
-  hash: abd12aee4bcd7c0efd04a3d47fecb5944c4ef69b1c053c49adc643166c850f12
-  ledger: 3856203
+5. build + sign + submit (createAccount path - new destination)
+  hash: 8248b170f3c08f092fbf36a1a9c25c41ccb36e833ed0db6a9b1b458cb8131a3b
+  ledger: 3856595
   receiver balance: { xlm: '25.0000000', funded: true }
-5. second payment (payment path - existing destination)
-  hash: d119739d2d72103ac41503f0bd65f14f9e8e65a0be1583a75ba1fc5164bf67c7
-  receiver balance: { xlm: '26.5000000', funded: true }
-6. error mapping - overspend
+6. second payment (payment path - existing destination, loose "1." input)
+  hash: 7368945f585ac7137ee9a68fc023fd518ec1c1d0d610f222a9c5737053654984
+  receiver balance: { xlm: '26.0000000', funded: true }
+7. error mapping - overspend
   mapped error: Not enough XLM: remember 1 XLM stays locked as the account reserve, plus the network fee.
-7. error mapping - new account below reserve
-  mapped error: GDMLRI... is a new account, so the first transfer must be at least 1 XLM.
+8. error mapping - new account below reserve
+  mapped error: GA27Y2... is a new account, so the first transfer must be at least 1 XLM.
 ```
 
 Both transactions above are real and permanently viewable on testnet:
-[`abd12aee…`](https://stellar.expert/explorer/testnet/tx/abd12aee4bcd7c0efd04a3d47fecb5944c4ef69b1c053c49adc643166c850f12) ·
-[`d1197394…`](https://stellar.expert/explorer/testnet/tx/d119739d2d72103ac41503f0bd65f14f9e8e65a0be1583a75ba1fc5164bf67c7)
+[`8248b170…`](https://stellar.expert/explorer/testnet/tx/8248b170f3c08f092fbf36a1a9c25c41ccb36e833ed0db6a9b1b458cb8131a3b) ·
+[`7368945f…`](https://stellar.expert/explorer/testnet/tx/7368945f585ac7137ee9a68fc023fd518ec1c1d0d610f222a9c5737053654984)
 
 ---
 
