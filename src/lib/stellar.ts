@@ -32,8 +32,11 @@ export const AMOUNT_PATTERN = /^\d*\.?\d*$/
  * The SDK rejects loose decimal strings like "1." or ".5", and floats lose
  * precision at stroop scale, so normalise as text: trim to 7 fractional
  * digits and drop redundant zeros without ever parsing to a number.
+ *
+ * Zero is allowed here — this is a format conversion, not a transfer rule. Use
+ * [`normalizeAmount`] when the value is something the user is trying to send.
  */
-export function normalizeAmount(input: string): string {
+export function normalizeDecimal(input: string): string {
   const trimmed = input.trim()
   if (!trimmed || trimmed === '.' || !AMOUNT_PATTERN.test(trimmed)) {
     throw new Error('Enter a valid decimal amount.')
@@ -42,8 +45,13 @@ export function normalizeAmount(input: string): string {
   const [whole = '', fraction = ''] = trimmed.split('.')
   const integerPart = whole.replace(/^0+(?=\d)/, '') || '0'
   const fractionPart = fraction.slice(0, 7).replace(/0+$/, '')
-  const normalized = fractionPart ? `${integerPart}.${fractionPart}` : integerPart
 
+  return fractionPart ? `${integerPart}.${fractionPart}` : integerPart
+}
+
+/** An amount to actually transfer, so zero is rejected on top of the format rules. */
+export function normalizeAmount(input: string): string {
+  const normalized = normalizeDecimal(input)
   if (normalized === '0') throw new Error('Enter an amount greater than 0.')
   return normalized
 }
@@ -59,6 +67,25 @@ export function explorerAccountUrl(address: string): string {
 export function shortenAddress(address: string, size = 4): string {
   if (address.length <= size * 2 + 3) return address
   return `${address.slice(0, size)}...${address.slice(-size)}`
+}
+
+/** Contracts count in stroops (1 XLM = 10^7), so conversions use BigInt, never floats. */
+export const STROOPS_PER_XLM = 10_000_000n
+
+export function toStroops(xlm: string): bigint {
+  const [whole, fraction = ''] = normalizeDecimal(xlm).split('.')
+  return BigInt(whole) * STROOPS_PER_XLM + BigInt(fraction.padEnd(7, '0'))
+}
+
+export function fromStroops(stroops: bigint | string | number): string {
+  const value = BigInt(stroops)
+  const sign = value < 0n ? '-' : ''
+  const absolute = value < 0n ? -value : value
+
+  const whole = absolute / STROOPS_PER_XLM
+  const fraction = (absolute % STROOPS_PER_XLM).toString().padStart(7, '0').replace(/0+$/, '')
+
+  return fraction ? `${sign}${whole}.${fraction}` : `${sign}${whole}`
 }
 
 export interface AccountBalance {

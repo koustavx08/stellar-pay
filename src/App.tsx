@@ -4,15 +4,18 @@ import { Alert } from './components/Alert'
 import { Header } from './components/Header'
 import { Landing } from './components/Landing'
 import { PaymentForm } from './components/PaymentForm'
+import { TipJarPanel } from './components/TipJarPanel'
 import { TxFeedback, type TxOutcome } from './components/TxFeedback'
 import { WalletPanel } from './components/WalletPanel'
 import { useBalance } from './hooks/useBalance'
+import { useTipJar } from './hooks/useTipJar'
 import { useWallet } from './hooks/useWallet'
 
 export default function App() {
   const wallet = useWallet()
   const connected = wallet.status === 'connected' && wallet.address !== null
   const balance = useBalance(connected ? wallet.address : null)
+  const jar = useTipJar(connected ? wallet.address : null)
   const [outcome, setOutcome] = useState<TxOutcome | null>(null)
 
   return (
@@ -48,12 +51,22 @@ export default function App() {
               onResult={setOutcome}
               onSettled={() => void balance.refresh()}
             />
+
+            <TipJarPanel
+              address={wallet.address!}
+              balance={balance.data?.xlm ?? '0'}
+              funded={balance.data?.funded ?? false}
+              disabled={!wallet.onTestnet}
+              jar={jar}
+              onResult={setOutcome}
+              onSettled={() => void balance.refresh()}
+            />
           </div>
         )}
       </main>
 
       <footer className="footer">
-        <span>Stellar Testnet · Horizon + Freighter</span>
+        <span>Stellar Testnet · Horizon + Soroban + Freighter</span>
         <a href="https://developers.stellar.org/docs" target="_blank" rel="noreferrer">
           Stellar docs ↗
         </a>

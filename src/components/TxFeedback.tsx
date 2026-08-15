@@ -6,10 +6,13 @@ export type TxOutcome =
   | {
       status: 'success'
       hash: string
-      ledger: number
+      /** Horizon reports the ledger inline; the Soroban RPC path does not. */
+      ledger?: number
       amount: string
       destination: string
       memo?: string
+      /** 'payment' is a classic Horizon operation, 'contract' a Soroban invocation. */
+      kind?: 'payment' | 'contract'
     }
   | { status: 'error'; message: string }
 
@@ -27,18 +30,21 @@ export function TxFeedback({ outcome, onDismiss }: TxFeedbackProps) {
     )
   }
 
+  const isContract = outcome.kind === 'contract'
+
   return (
-    <Alert tone="success" title="Payment sent" onDismiss={onDismiss}>
+    <Alert tone="success" title={isContract ? 'Tip sent' : 'Payment sent'} onDismiss={onDismiss}>
       <p>
-        Sent <strong>{outcome.amount} XLM</strong> to{' '}
+        {isContract ? 'Tipped' : 'Sent'} <strong>{outcome.amount} XLM</strong>{' '}
+        {isContract ? 'through contract' : 'to'}{' '}
         <code>{shortenAddress(outcome.destination, 6)}</code>
         {outcome.memo ? (
           <>
             {' '}
-            with memo <em>“{outcome.memo}”</em>
+            with {isContract ? 'message' : 'memo'} <em>“{outcome.memo}”</em>
           </>
         ) : null}
-        , included in ledger {outcome.ledger}.
+        {outcome.ledger ? `, included in ledger ${outcome.ledger}` : ''}.
       </p>
 
       <div className="tx-hash">
@@ -49,7 +55,12 @@ export function TxFeedback({ outcome, onDismiss }: TxFeedbackProps) {
         </div>
       </div>
 
-      <a className="btn btn--ghost btn--sm" href={explorerTxUrl(outcome.hash)} target="_blank" rel="noreferrer">
+      <a
+        className="btn btn--ghost btn--sm"
+        href={explorerTxUrl(outcome.hash)}
+        target="_blank"
+        rel="noreferrer"
+      >
         View on Stellar Expert ↗
       </a>
     </Alert>
