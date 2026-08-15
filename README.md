@@ -3,6 +3,7 @@
 **A Stellar testnet dApp with a Soroban smart contract.** Connect a Freighter wallet, read your XLM
 balance, send payments — and tip a Rust smart contract deployed on-chain.
 
+[![Live](https://img.shields.io/badge/live-stellar--pay--omega.vercel.app-black)](https://stellar-pay-omega.vercel.app)
 [![Network](https://img.shields.io/badge/network-Stellar%20Testnet-black)](https://stellar.expert/explorer/testnet)
 [![Contract](https://img.shields.io/badge/contract-deployed-success)](https://stellar.expert/explorer/testnet/contract/CBYESECEZHDVCZ6ZLAYXDBAFZO7Z67L256JUTNYZ2TJFCDUO4OR6UJAD)
 [![Tests](https://img.shields.io/badge/contract%20tests-12%20passing-success)](#testing)
@@ -52,7 +53,7 @@ wallet. No real funds are ever at risk — testnet XLM comes free from the Frien
 | **Repository** | <https://github.com/koustavx08/stellar-pay> |
 | **Contract** | [`CBYESECEZHDVCZ6ZLAYXDBAFZO7Z67L256JUTNYZ2TJFCDUO4OR6UJAD`](https://stellar.expert/explorer/testnet/contract/CBYESECEZHDVCZ6ZLAYXDBAFZO7Z67L256JUTNYZ2TJFCDUO4OR6UJAD) |
 | **Network** | Stellar Testnet |
-| **Live app** | _not deployed yet — see [Deployment](#deployment)_ |
+| **Live app** | **<https://stellar-pay-omega.vercel.app>** |
 
 ---
 
@@ -365,6 +366,9 @@ Those transactions are real and permanently viewable:
 ---
 
 ## Deployment
+
+Live at **<https://stellar-pay-omega.vercel.app>**, deployed from `main` on Vercel — every push
+redeploys automatically.
 
 The frontend is a static Vite build, so any static host works.
 [`vercel.json`](vercel.json) already supplies the build command, output directory, SPA rewrites and
