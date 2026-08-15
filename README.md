@@ -4,7 +4,7 @@
 balance, send payments — and tip a Rust smart contract deployed on-chain.
 
 [![Network](https://img.shields.io/badge/network-Stellar%20Testnet-black)](https://stellar.expert/explorer/testnet)
-[![Contract](https://img.shields.io/badge/contract-deployed-success)](https://stellar.expert/explorer/testnet/contract/CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO)
+[![Contract](https://img.shields.io/badge/contract-deployed-success)](https://stellar.expert/explorer/testnet/contract/CBYESECEZHDVCZ6ZLAYXDBAFZO7Z67L256JUTNYZ2TJFCDUO4OR6UJAD)
 [![Tests](https://img.shields.io/badge/contract%20tests-12%20passing-success)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
@@ -50,7 +50,7 @@ wallet. No real funds are ever at risk — testnet XLM comes free from the Frien
 | | |
 | --- | --- |
 | **Repository** | <https://github.com/koustavx08/stellar-pay> |
-| **Contract** | [`CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO`](https://stellar.expert/explorer/testnet/contract/CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO) |
+| **Contract** | [`CBYESECEZHDVCZ6ZLAYXDBAFZO7Z67L256JUTNYZ2TJFCDUO4OR6UJAD`](https://stellar.expert/explorer/testnet/contract/CBYESECEZHDVCZ6ZLAYXDBAFZO7Z67L256JUTNYZ2TJFCDUO4OR6UJAD) |
 | **Network** | Stellar Testnet |
 | **Live app** | _not deployed yet — see [Deployment](#deployment)_ |
 
@@ -66,7 +66,7 @@ flowchart TD
     UI -->|balance, payments| H[Horizon<br/>horizon-testnet.stellar.org]
     UI -->|contract reads + tips| R[Soroban RPC<br/>soroban-testnet.stellar.org]
 
-    R --> C[Tip Jar contract<br/>CC7VERBC…SYKJMKOO]
+    R --> C[Tip Jar contract<br/>CBYESECE…4OR6UJAD]
     C -->|token interface| S[Native XLM<br/>Stellar Asset Contract]
 
     H --> L[(Stellar Testnet ledger)]
@@ -108,16 +108,17 @@ Source: [`contracts/tip-jar/src/lib.rs`](contracts/tip-jar/src/lib.rs)
 
 | | |
 | --- | --- |
-| **Contract ID** | [`CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO`](https://stellar.expert/explorer/testnet/contract/CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO) |
+| **Contract ID** | [`CBYESECEZHDVCZ6ZLAYXDBAFZO7Z67L256JUTNYZ2TJFCDUO4OR6UJAD`](https://stellar.expert/explorer/testnet/contract/CBYESECEZHDVCZ6ZLAYXDBAFZO7Z67L256JUTNYZ2TJFCDUO4OR6UJAD) |
 | **Token** | Native XLM Stellar Asset Contract — [`CDLZFC3S…CYSC`](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC) |
+| **Owner** | [`GAH4EEJN…JTJN`](https://stellar.expert/explorer/testnet/account/GAH4EEJN6KQWZR33W4XMOWWGWH5JCANMJQ7PK72JL35MMJZ5PL5JJTJN) — the only address that can `withdraw` |
 | **Wasm hash** | `8d903ba4d9844d4a54f17441e21f39d41237e6744d85c4f0a14d1eee101646f4` |
 | **Wasm size** | 14,674 bytes |
 | **SDK** | `soroban-sdk` 27.0.6, built for `wasm32v1-none` |
 
 Deploy transactions:
-[upload](https://stellar.expert/explorer/testnet/tx/7bc331039439748a58ef591b2dfae640f183224a54cd2cd5d42c2e8b14feecf8) ·
-[create](https://stellar.expert/explorer/testnet/tx/c5d433bedeee5c9cbf4d64935c51f39c1fe103678caedfa6f967acafa35ca4c6) ·
-[initialize](https://stellar.expert/explorer/testnet/tx/fc18739b5058fd10492e894e3681a8755da4214e67de94148876ccaecbe97e1c)
+[upload](https://stellar.expert/explorer/testnet/tx/e5feccfbb745b5aef85b4f50024a506a569297ef50584808fd811df3b886c071) ·
+[create](https://stellar.expert/explorer/testnet/tx/72da94f578d747508c1b1462980052ce683f94458babc9dc6a494aae86c3f8fc) ·
+[initialize](https://stellar.expert/explorer/testnet/tx/a9555fe99e30b9d0f1dfdb62842e6f0dd73a22195b2aa693fb85b3c964804688)
 
 ### Interface
 
@@ -282,17 +283,17 @@ accounting moved.
 
 ```
 1. read state before
-  total tipped: 25 XLM
-  tip count: 2
-  jar balance: 25 XLM
+  total tipped: 0 XLM
+  tip count: 0
+  jar balance: 0 XLM
 2. fund a throwaway tipper
-  tipper: GB2MZPJDLI35KV2PZHXAJ3CXURXQJ6NEN2VJTPXHJDK3TEMZYQPJYY4I
+  tipper: GBNVI2BNFXM7P7OJ33RMFSCPMIVVWSNOC7PMSIMVN335LRGFQ6BCG2PW
 3. invoke tip() on the deployed contract
-  tx hash: ef9aa2d490355ae7b3c29678e134cb65682e733f4f9ba75d8c1c8bf3c0519d2d
+  tx hash: aeb0894664f7f788a961a3f2af2a120f6b37a23321fdfb8a390cb8f7be3f576b
 4. read state after
-  total tipped: 37.5 XLM
-  tip count: 3
-  jar balance: 37.5 XLM
+  total tipped: 12.5 XLM
+  tip count: 1
+  jar balance: 12.5 XLM
   last message: level 1 verification tip
   this tipper gave: 12.5 XLM
 5. assertions
