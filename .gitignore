@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Rust / Soroban build output
+contracts/target
+
+# Local secrets — never commit a deployer secret key
+.env
+.env.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

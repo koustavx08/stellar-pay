@@ -9,7 +9,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx scripts/testnet-smoke.ts"
+    "smoke": "tsx scripts/testnet-smoke.ts",
+    "contract:test": "cargo test --manifest-path contracts/Cargo.toml",
+    "contract:build": "cargo build --manifest-path contracts/Cargo.toml --target wasm32v1-none --release",
+    "contract:deploy": "tsx scripts/deploy-contract.ts",
+    "contract:verify": "tsx scripts/verify-contract.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

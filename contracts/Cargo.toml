@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["tip-jar"]
+
+[workspace.dependencies]
+soroban-sdk = "27.0.6"
+
+# Soroban charges by uploaded byte and by CPU instruction, so contracts are
+# built for size rather than speed.
+[profile.release]
+opt-level = "z"
+codegen-units = 1
+lto = true
+panic = "abort"
+strip = "symbols"
+debug = 0
+debug-assertions = false
+overflow-checks = true
