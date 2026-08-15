@@ -11,7 +11,12 @@
  * imports. Re-running this deploys a *new* contract; that is intentional, so a
  * bad deploy never silently overwrites a good one in place.
  *
- * Usage:  npm run deploy:contract
+ * Usage:  npm run contract:deploy -- --owner G...
+ *
+ * The owner is the only address that can withdraw, so it should normally be a
+ * wallet you control rather than the throwaway that paid for the deploy. Pass
+ * --owner (or set STELLAR_OWNER_ADDRESS); it defaults to the deployer.
+ *
  * Set STELLAR_DEPLOYER_SECRET to reuse an existing account, otherwise a fresh
  * testnet account is generated and funded by Friendbot.
  */
@@ -28,6 +33,7 @@ import {
   Keypair,
   Networks,
   Operation,
+  StrKey,
   TransactionBuilder,
   hash,
   rpc,
@@ -52,6 +58,11 @@ async function main(): Promise<void> {
 
   const deployer = await resolveDeployer()
   console.log(`deployer: ${deployer.publicKey()}`)
+
+  const owner = resolveOwner(deployer.publicKey())
+  console.log(
+    `owner:    ${owner}${owner === deployer.publicKey() ? '  (defaulted to the deployer)' : ''}`,
+  )
 
   // Native XLM reaches contracts through its Stellar Asset Contract, whose
   // address is derived from the asset and the network, not deployed by us.
@@ -88,7 +99,7 @@ async function main(): Promise<void> {
     deployer,
     contract.call(
       'initialize',
-      Address.fromString(deployer.publicKey()).toScVal(),
+      Address.fromString(owner).toScVal(),
       Address.fromString(tokenId).toScVal(),
     ),
     'initialize',
@@ -102,7 +113,8 @@ async function main(): Promise<void> {
     contractId,
     wasmHash: wasmHash.toString('hex'),
     tokenId,
-    owner: deployer.publicKey(),
+    owner,
+    deployer: deployer.publicKey(),
     deployedAt: new Date().toISOString(),
     transactions: {
       upload: uploadTx.hash,
@@ -114,6 +126,24 @@ async function main(): Promise<void> {
 
   console.log(`\nwrote ${OUTPUT_PATH}`)
   console.log(`explorer: https://stellar.expert/explorer/testnet/contract/${contractId}`)
+}
+
+/**
+ * The owner is stored on-chain and gates `withdraw`, so a typo here would mean
+ * a jar nobody can empty. Validate the key rather than letting a malformed
+ * address fail deep inside the initialize call.
+ */
+function resolveOwner(fallback: string): string {
+  const flagIndex = process.argv.indexOf('--owner')
+  const fromFlag = flagIndex === -1 ? undefined : process.argv[flagIndex + 1]
+  const requested = (fromFlag ?? process.env.STELLAR_OWNER_ADDRESS ?? '').trim()
+
+  if (!requested) return fallback
+  if (!StrKey.isValidEd25519PublicKey(requested)) {
+    throw new Error(`--owner must be a Stellar public key starting with G, got: ${requested}`)
+  }
+
+  return requested
 }
 
 async function resolveDeployer(): Promise<Keypair> {
