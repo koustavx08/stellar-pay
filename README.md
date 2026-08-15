@@ -1,189 +1,230 @@
-# Stellar Pay — Testnet Payment dApp
+# Stellar Pay
 
-> ⚪️ **Stellar Frontend Challenge — Level 1 (White Belt)**
+**A Stellar testnet dApp with a Soroban smart contract.** Connect a Freighter wallet, read your XLM
+balance, send payments — and tip a Rust smart contract deployed on-chain.
 
-A React + TypeScript dApp that connects a [Freighter](https://www.freighter.app/) wallet, reads the
-account's XLM balance from Horizon, and sends real payments on the **Stellar Testnet** — with clear
-success / failure feedback and a link to the transaction on the block explorer.
+[![Network](https://img.shields.io/badge/network-Stellar%20Testnet-black)](https://stellar.expert/explorer/testnet)
+[![Contract](https://img.shields.io/badge/contract-deployed-success)](https://stellar.expert/explorer/testnet/contract/CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO)
+[![Tests](https://img.shields.io/badge/contract%20tests-12%20passing-success)](#testing)
+[![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
-It also ships a **Soroban smart contract** written in Rust and deployed to testnet: a tip jar that
-holds XLM and records who tipped what. So the app demonstrates both halves of Stellar — classic
-payments through Horizon, and contract invocation through Soroban RPC.
-
-No real funds are ever involved: everything runs against testnet and accounts are funded by the
-Friendbot faucet.
+> Built for the **Stellar Frontend Challenge — Level 1 (White Belt)**, then taken past the brief with
+> a Soroban contract.
 
 ---
 
-## ✨ Features
+## Table of contents
 
-| Requirement | How it is covered |
+- [What this is](#what-this-is)
+- [Live links](#live-links)
+- [Architecture](#architecture)
+- [Features](#features)
+- [The smart contract](#the-smart-contract)
+- [Quickstart](#quickstart)
+- [Scripts](#scripts)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Project structure](#project-structure)
+- [Design decisions](#design-decisions)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
+## What this is
+
+Stellar has two distinct halves, and most beginner projects only touch one. This app does both:
+
+1. **Classic Stellar** — payments built as `payment` / `createAccount` operations, submitted through
+   Horizon. Fast, cheap, no contract involved.
+2. **Soroban** — a smart contract written in Rust, compiled to WebAssembly, deployed to testnet, and
+   invoked from the browser through Soroban RPC.
+
+Every transaction is real and permanently recorded on the Stellar testnet. No mocks, no simulated
+wallet. No real funds are ever at risk — testnet XLM comes free from the Friendbot faucet.
+
+---
+
+## Live links
+
+| | |
 | --- | --- |
-| **Wallet setup** | Freighter extension, network locked to Testnet — the UI warns and disables sending if the wallet is on any other network |
-| **Wallet connect** | `requestAccess()` prompts Freighter; an already-approved session is restored silently on reload |
-| **Wallet disconnect** | Clears the local session, stops all wallet reads, and is remembered across reloads so the app does not silently re-connect |
-| **Balance fetch** | Native XLM balance read from Horizon, with unfunded accounts detected and a one-click Friendbot faucet |
-| **Balance display** | Large balance card that also shows the *spendable* amount (balance − 1 XLM base reserve) |
-| **Send XLM** | Builds a payment transaction, signs it in Freighter, submits it to Horizon |
-| **Transaction feedback** | Live stage labels (building → waiting for signature → submitting), then a success panel with the **transaction hash**, ledger number and a Stellar Expert link — or a plain-English failure message |
-| **Error handling** | Input validation, Horizon result codes translated to readable text, rejected signatures, missing extension, wrong network |
-| **Smart contract** | A Rust/Soroban tip jar deployed to testnet — reads via RPC simulation, tips signed through Freighter, contract error codes mapped to plain English |
-
-Two details worth calling out:
-
-- **New destinations are handled correctly.** Stellar cannot `payment` into an account that does not
-  exist yet, so the app checks the destination and switches to a `createAccount` operation, enforcing
-  the 1 XLM minimum. This is the failure most Level 1 submissions hit.
-- **Reserve-aware amounts.** The "Max" button and validation subtract the 1 XLM base reserve and a fee
-  buffer, so a valid-looking amount does not fail on-chain with `op_underfunded`.
-- **Amounts are normalised as text, not floats.** The SDK rejects loose input like `1.` or `.5`, and
-  parsing to a JS number loses precision at stroop scale, so `normalizeAmount` trims to 7 fractional
-  digits purely as a string.
+| **Repository** | <https://github.com/koustavx08/stellar-pay> |
+| **Contract** | [`CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO`](https://stellar.expert/explorer/testnet/contract/CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO) |
+| **Network** | Stellar Testnet |
+| **Live app** | _not deployed yet — see [Deployment](#deployment)_ |
 
 ---
 
-## 📜 The smart contract
+## Architecture
 
-Beyond the classic payment flow, the app talks to a **Soroban smart contract** written in Rust and
-deployed to testnet: a tip jar that holds XLM and remembers who gave what.
+```mermaid
+flowchart TD
+    U[User] --> UI[React + TypeScript UI]
+    UI <--> FR[Freighter extension]
+
+    UI -->|balance, payments| H[Horizon<br/>horizon-testnet.stellar.org]
+    UI -->|contract reads + tips| R[Soroban RPC<br/>soroban-testnet.stellar.org]
+
+    R --> C[Tip Jar contract<br/>CC7VERBC…SYKJMKOO]
+    C -->|token interface| S[Native XLM<br/>Stellar Asset Contract]
+
+    H --> L[(Stellar Testnet ledger)]
+    R --> L
+    S --> L
+```
+
+Two independent paths to the same ledger:
+
+- **Payments** go `PaymentForm` → `src/lib/stellar.ts` → Horizon. The transaction is built locally,
+  signed by Freighter, submitted, and the result mapped to a readable message.
+- **Tips** go `TipJarPanel` → `src/lib/tipjar.ts` → Soroban RPC → the contract. Reads are simulated
+  (free, no signature); writes are simulated to compute the footprint, then signed and submitted.
+
+---
+
+## Features
+
+| Capability | How it works |
+| --- | --- |
+| **Wallet connect** | `requestAccess()` prompts Freighter; an already-approved session is restored silently on reload |
+| **Wallet disconnect** | Clears the session and stops all wallet reads — remembered across reloads, so the app never silently re-connects |
+| **Network guard** | Detects the wallet's network and disables sending unless it is Testnet |
+| **Balance** | Native XLM read from Horizon, with unfunded accounts detected and a one-click Friendbot faucet |
+| **Spendable amount** | Shows balance minus the 1 XLM base reserve, so the number you see is the number you can actually send |
+| **Send XLM** | Builds, signs and submits a payment — switching to `createAccount` when the destination does not exist yet |
+| **Tip the contract** | Invokes `tip()` on the deployed Soroban contract, moving real XLM into it |
+| **Contract stats** | Total tipped, tip count, jar balance, latest message and your own contribution, read live from chain |
+| **Transaction feedback** | Live stage labels, then a success panel with the transaction hash and an explorer link — or a plain-English failure |
+| **Error handling** | Horizon result codes and Soroban contract error codes both translated to readable text |
+
+---
+
+## The smart contract
+
+A tip jar that holds XLM and remembers who gave what.
 
 Source: [`contracts/tip-jar/src/lib.rs`](contracts/tip-jar/src/lib.rs)
 
 | | |
 | --- | --- |
 | **Contract ID** | [`CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO`](https://stellar.expert/explorer/testnet/contract/CC7VERBCH4QPKDTUCN7TOJGJT5XGL5WP5WYIYPJ6QISHHTEESYKJMKOO) |
-| **Network** | Stellar Testnet |
-| **Token** | Native XLM Stellar Asset Contract (`CDLZFC3S…CYSC`) |
+| **Token** | Native XLM Stellar Asset Contract — [`CDLZFC3S…CYSC`](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC) |
 | **Wasm hash** | `8d903ba4d9844d4a54f17441e21f39d41237e6744d85c4f0a14d1eee101646f4` |
 | **Wasm size** | 14,674 bytes |
+| **SDK** | `soroban-sdk` 27.0.6, built for `wasm32v1-none` |
 
 Deploy transactions:
 [upload](https://stellar.expert/explorer/testnet/tx/7bc331039439748a58ef591b2dfae640f183224a54cd2cd5d42c2e8b14feecf8) ·
 [create](https://stellar.expert/explorer/testnet/tx/c5d433bedeee5c9cbf4d64935c51f39c1fe103678caedfa6f967acafa35ca4c6) ·
 [initialize](https://stellar.expert/explorer/testnet/tx/fc18739b5058fd10492e894e3681a8755da4214e67de94148876ccaecbe97e1c)
 
-### What it does
+### Interface
 
 | Function | Auth | Purpose |
 | --- | --- | --- |
 | `initialize(owner, token)` | — | Sets the owner and accepted token. Callable once. |
 | `tip(from, amount, message)` | `from` | Pulls `amount` from the tipper into the jar and records it. |
-| `withdraw(to)` | `owner` | Sends the jar's whole balance to `to`. |
-| `total_tips()` · `tip_count()` · `tips_by(who)` · `last_message()` · `balance()` | — | Read-only views. |
+| `withdraw(to)` | `owner` | Sends the jar's entire balance to `to`. |
+| `total_tips()` | — | Total ever tipped, in stroops. |
+| `tip_count()` | — | Number of tips received. |
+| `tips_by(who)` | — | How much one address has tipped. |
+| `last_message()` | — | The most recent tip note. |
+| `balance()` | — | What the jar currently holds. |
 
-### Design notes
+Errors are typed, not strings:
 
-- **It never touches raw XLM.** Contracts cannot move native XLM directly — it reaches them through
-  the *Stellar Asset Contract*. The jar talks to the standard token interface, so it works with any
-  SEP-41 token; testnet XLM's SAC is just the address it happens to be initialised with.
-- **`from.require_auth()` is the whole security model.** The transfer debits the tipper, so the
-  contract must prove that exact call was authorised. Without that line anyone could drain anyone.
-  Because the tipper is also the transaction source, Soroban accepts the transaction signature as
-  that authorisation — so Freighter signs once and there is no separate auth entry.
-- **Funds move before the books are written.** The transfer runs first; if the tipper cannot cover it
-  the whole invocation reverts, so the counters can never record a tip that did not settle.
-- **Storage is split by lifetime.** Totals and the last message live in instance storage; per-tipper
-  balances live in persistent storage with their TTL bumped on write, so a busy tipper's record does
-  not expire out from under them.
-
-### Reading and writing from the frontend
-
-Reads ([`src/lib/tipjar.ts`](src/lib/tipjar.ts)) go through `simulateTransaction` — the RPC server
-runs the call in a sandbox and returns the value, so views cost nothing and need no signature. Writes
-are built, simulated to fill in the footprint and resource fees, signed by Freighter, then submitted
-and polled to completion.
-
----
-
-## 🖼️ Screenshots
-
-| Wallet connected | Balance displayed |
+| Code | Meaning |
 | --- | --- |
-| ![Wallet connected](screenshots/01-wallet-connected.png) | ![Balance displayed](screenshots/02-balance.png) |
+| `1` | Already initialized |
+| `2` | Not initialized |
+| `3` | Invalid amount (zero or negative) |
+| `4` | Message longer than 140 characters |
+| `5` | Nothing to withdraw |
 
-| Sending a testnet transaction | Transaction result shown to the user |
-| --- | --- |
-| ![Sending a payment](screenshots/03-send-payment.png) | ![Transaction result](screenshots/04-transaction-result.png) |
+### How a tip flows
 
----
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as App
+    participant F as Freighter
+    participant R as Soroban RPC
+    participant C as Tip Jar
+    participant S as XLM SAC
 
-## 🌐 Deploying the frontend
-
-The app is a static Vite build, so any static host works. [`vercel.json`](vercel.json) is already
-configured (build command, output directory, SPA rewrites, asset caching).
-
-To put it on Vercel:
-
-1. Go to <https://vercel.com/new> and sign in with GitHub.
-2. Import the `stellar-pay` repository.
-3. Leave every setting at its default — `vercel.json` supplies them.
-4. Click **Deploy**.
-
-No environment variables are needed: the network is testnet and the contract address ships in
-[`deployment.json`](deployment.json).
-
-Prefer the CLI?
-
-```bash
-npx vercel --prod
+    U->>A: enter amount + message
+    A->>R: simulate tip()
+    R-->>A: footprint + resource fees
+    A->>F: sign transaction
+    F-->>A: signed XDR
+    A->>R: submit
+    R->>C: tip(from, amount, message)
+    C->>C: from.require_auth()
+    C->>S: transfer(from → contract)
+    S-->>C: ok
+    C->>C: update totals, emit event
+    C-->>A: success
+    A->>U: transaction hash + explorer link
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## Quickstart
 
-- **React 19** + **TypeScript** + **Vite**
-- **Rust** + [`soroban-sdk`](https://docs.rs/soroban-sdk) — the on-chain Tip Jar contract
-- [`@stellar/stellar-sdk`](https://github.com/stellar/js-stellar-sdk) — transaction building, Horizon queries and Soroban RPC
-- [`@stellar/freighter-api`](https://github.com/stellar/freighter) — wallet connection and signing
-- Plain CSS (no UI framework)
-
-Network configuration lives in one place, [`src/lib/stellar.ts`](src/lib/stellar.ts):
-
-| Setting | Value |
-| --- | --- |
-| Horizon | `https://horizon-testnet.stellar.org` |
-| Friendbot | `https://friendbot.stellar.org` |
-| Passphrase | `Test SDF Network ; September 2015` |
-| Explorer | `https://stellar.expert/explorer/testnet` |
-
----
-
-## 🚀 Setup — run it locally
-
-### 1. Prerequisites
+### Prerequisites
 
 - **Node.js 18+** and npm
-- The **Freighter** browser extension — <https://www.freighter.app/>
+- The **[Freighter](https://www.freighter.app/)** browser extension
+- _Only if you want to build the contract:_ **Rust** with the `wasm32v1-none` target
 
-### 2. Prepare the wallet
+### Prepare your wallet
 
 1. Install Freighter and create (or import) a wallet.
 2. Open Freighter → network selector → choose **Testnet**.
-3. Copy your public key (it starts with `G…`).
+3. Copy your public key (it starts with `G`).
 
-### 3. Install and run
+### Run it
 
 ```bash
 git clone https://github.com/koustavx08/stellar-pay.git
-cd stellar-pay
-npm install
-npm run dev
+```
+
+```bash
+cd stellar-pay && npm install && npm run dev
 ```
 
 Open <http://localhost:5173>.
 
-### 4. Use the dApp
+### Use it
 
 1. Click **Connect Freighter** and approve the popup.
 2. If the account is new, click **Fund with Friendbot** — you get 10,000 test XLM.
-3. Paste a destination address, enter an amount, add an optional memo, and hit **Send payment**.
-4. Approve the transaction in Freighter. The hash and explorer link appear as soon as it lands.
+3. **Send a payment:** paste a destination, enter an amount, hit **Send payment**.
+4. **Tip the contract:** enter an amount and a message, hit **Send tip via contract**.
+5. Approve in Freighter. The hash and explorer link appear as soon as it lands.
 
-> Need a second address to send to? Generate one at
-> <https://lab.stellar.org/account/create> — or just send to any `G…` testnet key.
+> Need a second address to send to? Generate one at <https://lab.stellar.org/account/create>.
 
-### Available scripts
+### Working on the contract
+
+Rust is only needed if you want to modify or redeploy the contract:
+
+```bash
+rustup target add wasm32v1-none
+```
+
+```bash
+npm run contract:test && npm run contract:build && npm run contract:deploy
+```
+
+`contract:deploy` writes the new contract ID into [`deployment.json`](deployment.json), which the
+frontend imports. Set `STELLAR_DEPLOYER_SECRET` to reuse an existing account; otherwise a fresh
+testnet account is generated and funded automatically.
+
+---
+
+## Scripts
 
 | Command | What it does |
 | --- | --- |
@@ -191,16 +232,21 @@ Open <http://localhost:5173>.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build locally |
 | `npm run typecheck` | Type-check only |
-| `npm run smoke` | End-to-end testnet check of the transaction logic (see below) |
-| `npm run contract:test` | Run the Soroban contract's Rust unit tests |
+| `npm run smoke` | End-to-end testnet check of the payment logic |
+| `npm run contract:test` | Run the contract's Rust unit tests |
 | `npm run contract:build` | Compile the contract to `wasm32v1-none` |
 | `npm run contract:deploy` | Upload, instantiate and initialise the contract on testnet |
+| `npm run contract:verify` | Check the **deployed** contract end-to-end against testnet |
 
 ---
 
-## ✅ Verifying the contract
+## Testing
 
-`npm run contract:test` runs the contract against the real Soroban host environment:
+Three layers, each proving something the others cannot.
+
+### 1. Contract unit tests — `npm run contract:test`
+
+Runs against the real Soroban host environment.
 
 ```
 running 12 tests
@@ -220,15 +266,19 @@ test test::tips_accumulate_per_address ... ok
 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-Two of those matter more than the rest: `tip_requires_the_tipper_to_authorize` and
-`withdraw_requires_the_owner_signature` run with auth mocking **switched off**, so they prove the
-`require_auth` guards actually hold rather than being mocked away. And
-`tip_fails_when_the_tipper_cannot_cover_it` checks that a failed transfer reverts the counters too,
-instead of recording a tip that never settled.
+Three of those carry most of the weight:
 
-Unit tests only prove the logic against a simulated host. `npm run contract:verify` proves the
-contract **actually deployed on testnet** behaves the same — it funds a throwaway tipper, sends a
-real tip through the contract, and checks the on-chain accounting moved:
+- `tip_requires_the_tipper_to_authorize` and `withdraw_requires_the_owner_signature` run with auth
+  mocking **switched off**, so they prove the `require_auth` guards genuinely hold rather than being
+  mocked away.
+- `tip_fails_when_the_tipper_cannot_cover_it` proves a failed transfer reverts the counters too,
+  instead of recording a tip that never settled.
+
+### 2. Deployed-contract verification — `npm run contract:verify`
+
+Unit tests only prove the logic against a simulated host. This proves the contract **actually on
+testnet** behaves the same: it funds a throwaway tipper, sends a real tip, and checks the on-chain
+accounting moved.
 
 ```
 1. read state before
@@ -256,16 +306,13 @@ real tip through the contract, and checks the on-chain accounting moved:
   PASS: contract error code mapped to a readable message
 ```
 
-That last check matters: the contract returns `Error(Contract, #3)`, and the point is that a user
-never sees that — it is mapped back to the message the error code stands for.
+That last check matters: the contract returns `Error(Contract, #3)`, and the whole point is that a
+user never sees that — it is mapped back to the message the code stands for.
 
----
+### 3. Payment smoke test — `npm run smoke`
 
-## ✅ Verifying the transaction logic
-
-`npm run smoke` exercises the whole on-chain path without the browser: it generates a throwaway
-keypair, funds it with Friendbot, reads the balance, checks amount normalisation, builds/signs/submits
-two payments, and confirms the error mapping produces readable messages.
+Exercises the classic path without a browser: generates a keypair, funds it, reads the balance,
+checks amount normalisation, submits two payments, and confirms error mapping.
 
 ```
 1. address validation
@@ -298,61 +345,154 @@ two payments, and confirms the error mapping produces readable messages.
   mapped error: GD66GF... is a new account, so the first transfer must be at least 1 XLM.
 ```
 
-Both transactions above are real and permanently viewable on testnet:
+Those transactions are real and permanently viewable:
 [`ac580da5…`](https://stellar.expert/explorer/testnet/tx/ac580da50bd4358104c5e50c76f5b9105ae92240bf743c61e63594603b43744b) ·
 [`7e8f3501…`](https://stellar.expert/explorer/testnet/tx/7e8f3501d7a64208347bad292acd9abc2e2f70252f76d8639505d2325895555c)
 
 ---
 
-## 📁 Project structure
+## Screenshots
+
+| Wallet connected | Balance displayed |
+| --- | --- |
+| ![Wallet connected](screenshots/01-wallet-connected.png) | ![Balance displayed](screenshots/02-balance.png) |
+
+| Sending a testnet transaction | Transaction result shown to the user |
+| --- | --- |
+| ![Sending a payment](screenshots/03-send-payment.png) | ![Transaction result](screenshots/04-transaction-result.png) |
+
+---
+
+## Deployment
+
+The frontend is a static Vite build, so any static host works.
+[`vercel.json`](vercel.json) already supplies the build command, output directory, SPA rewrites and
+asset caching — no dashboard configuration and no environment variables, since the network is testnet
+and the contract address ships in [`deployment.json`](deployment.json).
+
+**Via the dashboard:** go to <https://vercel.com/new>, sign in with GitHub, import `stellar-pay`,
+leave every setting at its default, and click **Deploy**.
+
+**Via the CLI:**
+
+```bash
+npx vercel login
+```
+
+```bash
+npx vercel --prod
+```
+
+---
+
+## Project structure
 
 ```
 contracts/
 └── tip-jar/
+    ├── Cargo.toml
     └── src/
-        ├── lib.rs        # The Soroban contract: tip, withdraw, views, events
-        └── test.rs       # 12 unit tests against the Soroban host
+        ├── lib.rs            # The contract: tip, withdraw, views, events, typed errors
+        └── test.rs           # 12 unit tests against the Soroban host
 src/
 ├── lib/
-│   ├── stellar.ts        # Horizon client, balance fetch, tx building, result-code → message mapping
-│   ├── freighter.ts      # Wallet detection, connect, session restore, signing
-│   └── tipjar.ts         # Contract client: RPC simulation for reads, invocation for writes
+│   ├── stellar.ts            # Horizon client, balances, tx building, result-code mapping
+│   ├── freighter.ts          # Wallet detection, connect, session restore, signing
+│   └── tipjar.ts             # Contract client: RPC simulation for reads, invocation for writes
 ├── hooks/
-│   ├── useWallet.ts      # Connect / disconnect + polls for address & network changes
-│   ├── useBalance.ts     # Balance fetching with loading and error state
-│   └── useTipJar.ts      # Contract stats with loading and error state
+│   ├── useWallet.ts          # Connect / disconnect + polls for address & network changes
+│   ├── useBalance.ts         # Balance fetching with loading and error state
+│   └── useTipJar.ts          # Contract stats with loading and error state
 ├── components/
-│   ├── Header.tsx        # Brand, network badge, connect / disconnect
-│   ├── Landing.tsx       # Pre-connection screen with setup steps
-│   ├── WalletPanel.tsx   # Address, balance, faucet, explorer link
-│   ├── PaymentForm.tsx   # Validation + send flow (classic payment)
-│   ├── TipJarPanel.tsx   # Contract stats + tip flow (Soroban invocation)
-│   ├── TxFeedback.tsx    # Success / failure panel with tx hash
-│   ├── Alert.tsx         # Shared alert component
-│   └── CopyButton.tsx    # Copy-to-clipboard control
-├── App.tsx               # Layout and state wiring
+│   ├── Header.tsx            # Brand, network badge, connect / disconnect
+│   ├── Landing.tsx           # Pre-connection screen with setup steps
+│   ├── WalletPanel.tsx       # Address, balance, faucet, explorer link
+│   ├── PaymentForm.tsx       # Validation + send flow (classic payment)
+│   ├── TipJarPanel.tsx       # Contract stats + tip flow (Soroban invocation)
+│   ├── TxFeedback.tsx        # Success / failure panel with tx hash
+│   ├── Alert.tsx             # Shared alert component
+│   └── CopyButton.tsx        # Copy-to-clipboard control
+├── App.tsx                   # Layout and state wiring
 └── styles.css
 scripts/
-├── testnet-smoke.ts      # End-to-end testnet check of the transaction logic
-└── deploy-contract.ts    # Uploads, instantiates and initialises the contract
-deployment.json           # Contract id and deploy transaction hashes
+├── testnet-smoke.ts          # End-to-end testnet check of the payment logic
+├── deploy-contract.ts        # Uploads, instantiates and initialises the contract
+└── verify-contract.ts        # Checks the deployed contract end-to-end
+deployment.json               # Contract id, wasm hash and deploy transaction hashes
+vercel.json                   # Static hosting configuration
 ```
+
+### Tech stack
+
+- **React 19** + **TypeScript** + **Vite** — no UI framework, plain CSS
+- **Rust** + [`soroban-sdk`](https://docs.rs/soroban-sdk) 27 — the on-chain contract
+- [`@stellar/stellar-sdk`](https://github.com/stellar/js-stellar-sdk) 16 — transaction building,
+  Horizon queries and Soroban RPC
+- [`@stellar/freighter-api`](https://github.com/stellar/freighter) 6 — wallet connection and signing
+
+Network configuration lives in one place, [`src/lib/stellar.ts`](src/lib/stellar.ts):
+
+| Setting | Value |
+| --- | --- |
+| Horizon | `https://horizon-testnet.stellar.org` |
+| Soroban RPC | `https://soroban-testnet.stellar.org` |
+| Friendbot | `https://friendbot.stellar.org` |
+| Passphrase | `Test SDF Network ; September 2015` |
+| Explorer | `https://stellar.expert/explorer/testnet` |
 
 ---
 
-## 🧯 Troubleshooting
+## Design decisions
+
+**New destinations are handled correctly.** Stellar cannot `payment` into an account that does not
+exist yet, so the app checks the destination and switches to a `createAccount` operation, enforcing
+the 1 XLM minimum. This is the failure most beginner submissions hit.
+
+**Reserve-aware amounts.** The Max button and validation subtract the 1 XLM base reserve and a fee
+buffer, so a valid-looking amount does not fail on-chain with `op_underfunded`.
+
+**Amounts are normalised as text, never floats.** The SDK rejects loose input like `1.` or `.5`, and
+parsing to a JS number loses precision at stroop scale. `normalizeDecimal` handles the format and
+`normalizeAmount` adds the rule that a transfer must exceed zero — kept separate, because converting
+a legitimately-zero balance is not an error.
+
+**The contract never touches raw XLM.** Contracts cannot move native XLM directly; it reaches them
+through the Stellar Asset Contract. The jar talks to the standard token interface, so it works with
+any SEP-41 token — testnet XLM's SAC is just the address it happens to be initialised with.
+
+**`from.require_auth()` is the entire security model.** The transfer debits the tipper, so the
+contract must prove that exact call was authorised. Without that line, anyone could drain anyone.
+Because the tipper is also the transaction source, Soroban accepts the transaction signature as that
+authorisation, so Freighter signs once and there is no separate auth entry to approve.
+
+**Funds move before the books are written.** The transfer runs first; if the tipper cannot cover it
+the whole invocation reverts, so the counters can never record a tip that did not settle.
+
+**Storage is split by lifetime.** Totals and the last message live in instance storage; per-tipper
+balances live in persistent storage with their TTL bumped on write, so an active tipper's record does
+not expire out from under them.
+
+**Disconnect is remembered.** Freighter has no "revoke access" API, so disconnecting is a local
+action. Persisting it means a page reload does not silently re-connect a wallet the user just
+disconnected.
+
+---
+
+## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
-| "Freighter wallet was not detected" | Install the extension and reload the page — it injects itself after load |
+| "Freighter wallet was not detected" | Install the extension and reload — it injects itself after page load |
 | Header shows `PUBLIC` in yellow | Switch Freighter to Testnet; sending stays disabled until you do |
 | "Your account is not funded yet" | Click **Fund with Friendbot** |
 | "The destination account does not exist on testnet" | Send at least 1 XLM so the account gets created |
 | "Not enough XLM…" | 1 XLM is permanently locked as the base reserve — use the **Max** button |
-| Nothing happens after clicking send | Check the Freighter popup; it may be waiting behind the browser window |
+| Nothing happens after clicking send | Check the Freighter popup; it may be behind the browser window |
+| Contract stats show `—` | The RPC call failed — check the network tab; testnet RPC occasionally rate-limits |
+| `cargo build` fails on Windows | Install the GNU toolchain: `rustup toolchain install stable-x86_64-pc-windows-gnu` |
 
 ---
 
-## 📄 License
+## License
 
 MIT
