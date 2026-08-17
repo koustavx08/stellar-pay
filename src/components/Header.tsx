@@ -16,7 +16,7 @@ export function Header({ wallet }: HeaderProps) {
         </span>
         <div>
           <p className="header__title">Stellar Pay</p>
-          <p className="header__subtitle">Testnet payment dApp</p>
+          <p className="header__subtitle">Testnet payments + Soroban</p>
         </div>
       </div>
 

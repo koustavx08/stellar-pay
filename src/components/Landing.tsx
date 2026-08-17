@@ -1,3 +1,6 @@
+import { CONTRACT_ID, explorerContractUrl } from '../lib/tipjar'
+import { shortenAddress } from '../lib/stellar'
+
 interface LandingProps {
   connecting: boolean
   onConnect: () => void
@@ -6,16 +9,16 @@ interface LandingProps {
 const STEPS = [
   'Install the Freighter browser extension and create a wallet.',
   'Switch the network inside Freighter to Testnet.',
-  'Connect here, fund your account with the faucet, and send XLM.',
+  'Connect here, fund your account with the faucet, then send XLM or tip the contract.',
 ]
 
 export function Landing({ connecting, onConnect }: LandingProps) {
   return (
     <section className="landing">
-      <h1 className="landing__title">Send XLM on the Stellar testnet</h1>
+      <h1 className="landing__title">Send XLM and tip a smart contract</h1>
       <p className="landing__lead">
-        Connect your Freighter wallet to see your balance and make a real payment on testnet — no
-        real funds involved.
+        Connect your Freighter wallet to make a real payment on the Stellar testnet, or tip a Soroban
+        contract deployed on-chain — no real funds involved.
       </p>
 
       <button type="button" className="btn btn--primary btn--lg" onClick={onConnect} disabled={connecting}>
@@ -30,6 +33,14 @@ export function Landing({ connecting, onConnect }: LandingProps) {
           </li>
         ))}
       </ol>
+
+      <p className="text-muted">
+        Tip jar contract{' '}
+        <a href={explorerContractUrl()} target="_blank" rel="noreferrer">
+          {shortenAddress(CONTRACT_ID, 6)} ↗
+        </a>{' '}
+        — live on Stellar testnet.
+      </p>
     </section>
   )
 }
