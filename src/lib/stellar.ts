@@ -237,3 +237,180 @@ export function describeError(error: unknown): string {
   if (typeof error === 'string') return error
   return 'Something went wrong.'
 }
+
+/* Payment history ---------------------------------------------------------- */
+
+export type PaymentDirection = 'sent' | 'received'
+
+export interface PaymentRecord {
+  /** Horizon's operation id — unique, and what the detail route is keyed on. */
+  id: string
+  direction: PaymentDirection
+  /** 'payment' for a normal transfer, 'create_account' when it funded a new account. */
+  kind: 'payment' | 'create_account'
+  /** Native XLM amount as a decimal string. */
+  amount: string
+  /** The other party: who we paid, or who paid us. */
+  counterparty: string
+  from: string
+  to: string
+  hash: string
+  createdAt: string
+  /** Non-native assets are listed but flagged, since this app only sends XLM. */
+  assetCode: string
+}
+
+/**
+ * Recent XLM payments for an account, newest first.
+ *
+ * Horizon exposes payments as *operations*, so a single transaction with
+ * several payments yields several records. That is the honest representation
+ * of what happened on-chain, so it is what we show.
+ */
+export async function getPaymentHistory(
+  address: string,
+  limit = 50,
+): Promise<PaymentRecord[]> {
+  try {
+    const page = await server.payments().forAccount(address).order('desc').limit(limit).call()
+
+    return page.records
+      .map((record) => toPaymentRecord(record, address))
+      .filter((record): record is PaymentRecord => record !== null)
+  } catch (error) {
+    // An account that has never been funded has no history rather than an error.
+    if (isNotFound(error)) return []
+    throw new Error(`Could not load transaction history: ${describeError(error)}`)
+  }
+}
+
+/** Looks up one payment operation by its Horizon operation id. */
+export async function getPaymentById(
+  id: string,
+  address: string,
+): Promise<PaymentRecord | null> {
+  try {
+    const record = await server.operations().operation(id).call()
+    return toPaymentRecord(record as HorizonPaymentLike, address)
+  } catch (error) {
+    if (isNotFound(error)) return null
+    throw new Error(`Could not load the transaction: ${describeError(error)}`)
+  }
+}
+
+/** Ledger and fee live on the transaction, not the operation. */
+export interface TransactionDetail {
+  ledger: number
+  feeCharged: string
+  memo?: string
+  successful: boolean
+}
+
+export async function getTransactionDetail(hash: string): Promise<TransactionDetail | null> {
+  try {
+    const tx = await server.transactions().transaction(hash).call()
+    return {
+      ledger: tx.ledger_attr,
+      feeCharged: tx.fee_charged?.toString() ?? '0',
+      memo: tx.memo,
+      successful: tx.successful,
+    }
+  } catch (error) {
+    if (isNotFound(error)) return null
+    return null
+  }
+}
+
+interface HorizonPaymentLike {
+  id: string
+  type: string
+  transaction_hash: string
+  created_at: string
+  from?: string
+  to?: string
+  amount?: string
+  asset_type?: string
+  asset_code?: string
+  funder?: string
+  account?: string
+  starting_balance?: string
+}
+
+/**
+ * Horizon models `create_account` and `payment` with different field names, so
+ * both are normalised into one shape the UI can render uniformly.
+ */
+function toPaymentRecord(raw: HorizonPaymentLike, viewer: string): PaymentRecord | null {
+  if (raw.type === 'create_account') {
+    const from = raw.funder ?? ''
+    const to = raw.account ?? ''
+    const direction: PaymentDirection = from === viewer ? 'sent' : 'received'
+    return {
+      id: raw.id,
+      direction,
+      kind: 'create_account',
+      amount: raw.starting_balance ?? '0',
+      counterparty: direction === 'sent' ? to : from,
+      from,
+      to,
+      hash: raw.transaction_hash,
+      createdAt: raw.created_at,
+      assetCode: 'XLM',
+    }
+  }
+
+  if (raw.type === 'payment') {
+    const from = raw.from ?? ''
+    const to = raw.to ?? ''
+    const direction: PaymentDirection = from === viewer ? 'sent' : 'received'
+    return {
+      id: raw.id,
+      direction,
+      kind: 'payment',
+      amount: raw.amount ?? '0',
+      counterparty: direction === 'sent' ? to : from,
+      from,
+      to,
+      hash: raw.transaction_hash,
+      createdAt: raw.created_at,
+      assetCode: raw.asset_type === 'native' ? 'XLM' : (raw.asset_code ?? 'unknown'),
+    }
+  }
+
+  // Other operation types (trustlines, contract invocations) are not payments
+  // and are deliberately left out rather than guessed at.
+  return null
+}
+
+export function formatXlmAmount(value: string): string {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return value
+  return parsed.toLocaleString('en-US', { maximumFractionDigits: 7 })
+}
+
+export function formatTimestamp(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export function formatRelativeTime(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return formatTimestamp(iso)
+}

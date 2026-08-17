@@ -400,25 +400,35 @@ contracts/
         ├── lib.rs            # The contract: tip, withdraw, views, events, typed errors
         └── test.rs           # 12 unit tests against the Soroban host
 src/
-├── lib/
-│   ├── stellar.ts            # Horizon client, balances, tx building, result-code mapping
+├── lib/                      # Blockchain layer — no React, no UI
+│   ├── stellar.ts            # Horizon client, balances, tx building, history, error mapping
 │   ├── freighter.ts          # Wallet detection, connect, session restore, signing
-│   └── tipjar.ts             # Contract client: RPC simulation for reads, invocation for writes
-├── hooks/
+│   ├── tipjar.ts             # Contract client: RPC simulation for reads, invocation for writes
+│   └── onboarding.ts         # Per-wallet onboarding completion, stored locally
+├── hooks/                    # Blockchain state, exposed to React
 │   ├── useWallet.ts          # Connect / disconnect + polls for address & network changes
 │   ├── useBalance.ts         # Balance fetching with loading and error state
+│   ├── useTransactions.ts    # Payment history with loading and error state
 │   └── useTipJar.ts          # Contract stats with loading and error state
+├── context/
+│   └── WalletProvider.tsx    # Single wallet + balance instance shared by every route
+├── pages/                    # One file per route
+│   ├── LandingPage.tsx       # Marketing page, hero, how-it-works, self-custody
+│   ├── OnboardingPage.tsx    # Three-step first-run flow, skippable
+│   ├── DashboardPage.tsx     # Balance, quick actions, recent activity
+│   ├── SendPage.tsx          # Recipient → amount → review → confirm → success
+│   ├── ReceivePage.tsx       # QR code and address sharing
+│   ├── ActivityPage.tsx      # Full history, filterable, grouped by day
+│   ├── ActivityDetailPage.tsx# One transaction, as recorded on the ledger
+│   ├── TipJarPage.tsx        # Soroban contract stats and tipping
+│   └── WalletPage.tsx        # Account profile, balances, disconnect
 ├── components/
-│   ├── Header.tsx            # Brand, network badge, connect / disconnect
-│   ├── Landing.tsx           # Pre-connection screen with setup steps
-│   ├── WalletPanel.tsx       # Address, balance, faucet, explorer link
-│   ├── PaymentForm.tsx       # Validation + send flow (classic payment)
-│   ├── TipJarPanel.tsx       # Contract stats + tip flow (Soroban invocation)
-│   ├── TxFeedback.tsx        # Success / failure panel with tx hash
-│   ├── Alert.tsx             # Shared alert component
+│   ├── layout/               # AppShell, WalletMenu, RequireWallet route guard
+│   ├── ui/                   # Button, Card, States, Toast, PageHeader, AddressDisplay
+│   ├── TransactionRow.tsx    # Shared row used by dashboard and activity
 │   └── CopyButton.tsx        # Copy-to-clipboard control
-├── App.tsx                   # Layout and state wiring
-└── styles.css
+├── App.tsx                   # Routing and providers
+└── styles.css                # Design tokens and component styles
 scripts/
 ├── testnet-smoke.ts          # End-to-end testnet check of the payment logic
 ├── deploy-contract.ts        # Uploads, instantiates and initialises the contract
