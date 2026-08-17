@@ -367,8 +367,11 @@ Those transactions are real and permanently viewable:
 
 ## Deployment
 
-Live at **<https://stellar-pay-omega.vercel.app>**, deployed from `main` on Vercel — every push
-redeploys automatically.
+Live at **<https://stellar-pay-omega.vercel.app>**, hosted on Vercel.
+
+> **Note:** the live URL can lag behind `main`. If the deployment is not linked to the GitHub
+> repository, pushing does not rebuild it — check **Project → Settings → Git** in Vercel, or
+> redeploy manually.
 
 The frontend is a static Vite build, so any static host works.
 [`vercel.json`](vercel.json) already supplies the build command, output directory, SPA rewrites and
