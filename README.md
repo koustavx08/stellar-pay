@@ -355,13 +355,20 @@ Those transactions are real and permanently viewable:
 
 ## Screenshots
 
-| Wallet connected | Balance displayed |
-| --- | --- |
-| ![Wallet connected](screenshots/01-wallet-connected.png) | ![Balance displayed](screenshots/02-balance.png) |
+> Not captured yet — see [`screenshots/README.md`](screenshots/README.md) for what each one should
+> show. The live app is at <https://stellar-pay-omega.vercel.app> in the meantime.
 
-| Sending a testnet transaction | Transaction result shown to the user |
+| Landing | Wallet connected |
 | --- | --- |
-| ![Sending a payment](screenshots/03-send-payment.png) | ![Transaction result](screenshots/04-transaction-result.png) |
+| ![Landing page](screenshots/01-landing.png) | ![Wallet connected](screenshots/02-wallet-connected.png) |
+
+| Balance displayed | Sending a testnet payment |
+| --- | --- |
+| ![Balance displayed](screenshots/03-balance.png) | ![Sending a payment](screenshots/04-send-payment.png) |
+
+| Transaction result | Activity history |
+| --- | --- |
+| ![Transaction result](screenshots/05-transaction-result.png) | ![Activity](screenshots/06-activity.png) |
 
 ---
 
